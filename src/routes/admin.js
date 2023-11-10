@@ -18,9 +18,8 @@ router.get("/best-profession", getProfile, async (req, res) => {
       ClientId: profile.id,
     },
   });
-  // Getting the ids of the contracts
-  const contractIds = contracts.map((contract) => contract.id);
   // Getting the contractors ids
+  const contractIds = contracts.map((contract) => contract.id);
 
   const { Job } = req.app.get("models");
   // Getting the jobs where the contract is in the list of contracts and between selected dates
@@ -42,7 +41,7 @@ router.get("/best-profession", getProfile, async (req, res) => {
   });
   // Getting the jobContractIds
   const jobContractIds = jobs.map((job) => job.ContractId);
-  // Getting the contractors ids that in which their jobs were paid in the given period
+  // Getting the contractor ids that in which their jobs were paid in the given period
   const contractorsIds = contracts
     .filter((contract) => jobContractIds.includes(contract.id))
     .map((contract) => contract.ContractorId);
@@ -91,7 +90,7 @@ router.get("/best-profession", getProfile, async (req, res) => {
 });
 
 router.get("/best-clients", getProfile, async (req, res) => {
-  // Getting the start and end dates
+  // Getting the start - end dates and the limit
   const { start, end, limit: limitQueryParam } = req.query;
   const limit = limitQueryParam ? parseInt(limitQueryParam) : 2;
 
@@ -108,7 +107,7 @@ router.get("/best-clients", getProfile, async (req, res) => {
   const contractIds = [...new Set(jobs.map((job) => job.ContractId))];
 
   const { Contract } = req.app.get("models");
-  // Getting the contracts where the status is "in_progress"
+  // Getting the contracts
   const contracts = await Contract.findAll({
     where: {
       id: {
@@ -122,7 +121,7 @@ router.get("/best-clients", getProfile, async (req, res) => {
   ];
 
   const { Profile } = req.app.get("models");
-  // Getting the contractors
+  // Getting the clients
   const clients = await Profile.findAll({
     where: {
       id: {
@@ -154,7 +153,7 @@ router.get("/best-clients", getProfile, async (req, res) => {
     }
   });
 
-  // Getting the top clients ids
+  // Getting the top clients ids sorted, limited by the limit
   const topClientsIdsSorted = Object.keys(clientIdToTotalPaid)
     .sort((a, b) => clientIdToTotalPaid[b] - clientIdToTotalPaid[a])
     .slice(0, limit);

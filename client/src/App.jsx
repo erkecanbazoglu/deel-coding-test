@@ -11,7 +11,7 @@ function App() {
   const apiPath = window.location.href.split(window.location.origin)[1];
 
   // You can change the profileId to test different scenarios
-  const profileId = 4;
+  const profileId = 3;
 
   useEffect(() => {
     // Example request:

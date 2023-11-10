@@ -37,7 +37,7 @@ app.get("/contracts", getProfile, async (req, res) => {
   const profile = req.profile;
 
   // Getting the non-terminated contracts for the profile
-  // *Test using the raw queries of sequelize*
+  // Below tested the feature of the raw queries of sequelize*
   const result = await sequelize.query(
     `SELECT * from contracts WHERE ${
       profile.type === "client" ? "ClientId" : "ContractorId"
@@ -84,7 +84,7 @@ app.get("/jobs/unpaid", getProfile, async (req, res) => {
       ],
     },
   });
-  // Returning the contract
+  // Returning the jobs
   return res.json(jobs);
 });
 
@@ -121,7 +121,6 @@ app.get("/jobs/:job_id/pay", getProfile, async (req, res) => {
   // Getting the contract id
   const contractId = job.ContractId;
 
-  // Getting the contract
   const { Contract } = req.app.get("models");
   // Getting the contract
   const contract = await Contract.findOne({
@@ -133,13 +132,14 @@ app.get("/jobs/:job_id/pay", getProfile, async (req, res) => {
   // Returning 404 if contract not found
   if (!contract) return res.status(404).end();
 
-  // Returning 401 if profile client id does not match the profile id
+  // Returning 401 if contract client id does not match the client profile id
   if (contract.ClientId !== profile.id) {
     return res.status(401).end();
   }
 
   const { Profile } = req.app.get("models");
 
+  // Getting the contractor profile
   const contractor = await Profile.findOne({
     where: { id: contract.ContractorId },
   });
@@ -147,50 +147,59 @@ app.get("/jobs/:job_id/pay", getProfile, async (req, res) => {
   // Returning 404 if contractor not found
   if (!contractor) return res.status(404).end();
 
-  // Updating the balance of the client
-  await Profile.update(
-    { balance: balance - job.price },
-    {
-      where: {
-        id: profile.id,
-      },
-    }
-  );
+  try {
+    // Transaction to update sensitive data (balance) at once
+    const result = await sequelize.transaction(async (t) => {
+      // Updating the balance of the client
+      await Profile.update(
+        { balance: balance - job.price },
+        {
+          where: {
+            id: profile.id,
+          },
+        },
+        { transaction: t }
+      );
 
-  // Updating the balance of the contractor
-  await Profile.update(
-    { balance: contractor.balance + job.price },
-    {
-      where: {
-        id: contract.ContractorId,
-      },
-    }
-  );
+      // Updating the balance of the contractor
+      await Profile.update(
+        { balance: contractor.balance + job.price },
+        {
+          where: {
+            id: contract.ContractorId,
+          },
+        },
+        { transaction: t }
+      );
+
+      return "ok";
+    });
+  } catch (error) {
+    // Handling the transaction error
+    console.log(error);
+    return res.status(500).end();
+  }
 
   return res.status(200).json("ok");
 });
 
 // Where does the deposit amount come from?
-// UserId could be retrieved from the headers or should someone else be able to deposit money?
-// I assume not, so I will use it to double check that users are the same
+// Isn't the userId in query params same as the profile id provided in the headers?
+// I assume someone else should not be able to deposit, so I will use it to double check that users are the same
 app.get("/balances/deposit/:userId", getProfile, async (req, res) => {
   const profile = req.profile;
-
-  // Returning 401 if profile is not authorized to deposit (contractor)
-  if (profile.type === "contractor") {
-    return res.status(401).end();
-  }
 
   // Getting the user id
   const { userId } = req.params;
 
-  // Returning 401 if profile client id does not match the profile id
-  if (userId != profile.id) {
+  // Returning 401 if profile is not authorized to deposit (contractor)
+  // Or if client profile id does not match the userId in query params
+  if (profile.type === "contractor" || userId != profile.id) {
     return res.status(401).end();
   }
 
   const { Contract } = req.app.get("models");
-  // Getting the contracts where the status is "in_progress"
+  // Getting the contracts where the status is not "terminated"
   const contracts = await Contract.findAll({
     where: {
       [Op.and]: [
@@ -230,7 +239,7 @@ app.get("/balances/deposit/:userId", getProfile, async (req, res) => {
   // Getting the total amount of the jobs
   const totalAmount = jobs.reduce((acc, job) => acc + job.price, 0);
 
-  // Since not clear the deposit amount, I will assume it is 20% of the current balance
+  // Since the deposit amount is not clear , I will assume it is 20% of the current balance
   const depositAmount = profile.balance * 0.2;
 
   // Returning 402 if the deposit amount is 25% greater than the total amount
