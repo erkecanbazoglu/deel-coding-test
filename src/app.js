@@ -149,28 +149,30 @@ app.get("/jobs/:job_id/pay", getProfile, async (req, res) => {
 
   try {
     // Transaction to update sensitive data (balance) at once
-    const result = await sequelize.transaction(async (t) => {
-      // Updating the balance of the client
-      await Profile.update(
-        { balance: balance - job.price },
-        {
-          where: {
-            id: profile.id,
+    await sequelize.transaction(async (t) => {
+      // Using Promise.all to run the updates concurrently
+      await Promise.all([
+        // Updating the balance of the client
+        Profile.update(
+          { balance: balance - job.price },
+          {
+            where: {
+              id: profile.id,
+            },
           },
-        },
-        { transaction: t }
-      );
-
-      // Updating the balance of the contractor
-      await Profile.update(
-        { balance: contractor.balance + job.price },
-        {
-          where: {
-            id: contract.ContractorId,
+          { transaction: t }
+        ),
+        // Updating the balance of the contractor
+        Profile.update(
+          { balance: contractor.balance + job.price },
+          {
+            where: {
+              id: contract.ContractorId,
+            },
           },
-        },
-        { transaction: t }
-      );
+          { transaction: t }
+        ),
+      ]);
 
       return "ok";
     });
